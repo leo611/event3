@@ -34,6 +34,8 @@ const SignIn = () => {
     try {
       // Try to sign in directly
       await signIn(form.email.trim(), form.password);  // Added trim() to remove any whitespace
+      setIsLoggedIn(true);  // Add this line
+      await checkUser();     // Add this line
       router.replace('/home');
     } catch (error) {
       console.error('Sign in error:', error);

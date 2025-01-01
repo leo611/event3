@@ -1,10 +1,14 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { getCurrentUser, updateUserProfile } from '../lib/appwrite';
-import { databases, config } from '../lib/appwrite';
+import { databases, config, account } from '../lib/appwrite';
 import { Query } from 'react-native-appwrite';
 
-// Create the context
-const GlobalContext = createContext();
+const GlobalContext = createContext({
+    user: null,
+    setUser: () => {},
+    loading: false,
+    checkUser: () => {},
+});
 
 // Create the hook for using the context
 export const useGlobalContext = () => {
@@ -21,17 +25,71 @@ export function GlobalProvider({ children }) {
     const [isLoading, setisLoading] = useState(true);
     const [eventRegistrations, setEventRegistrations] = useState({});
 
-    const debugUserSession = () => {
-        if (user) {
-            console.log('Current User Session:', {
-                userId: user.$id,
-                name: user.name,
-                email: user.email,
-                createdAt: user.$createdAt,
-                sessionStarted: new Date().toISOString()
-            });
-        } else {
-            console.log('No active user session');
+    const debugUserSession = async () => {
+        try {
+            const currentSession = await account.get();
+            if (currentSession) {
+                console.log('Current User Session:', currentSession);
+                setUser(currentSession);
+                setIsLoggedIn(true);
+                // Trigger event registrations refresh
+                await updateAllEventRegistrations();
+            } else {
+                console.log('No active user session');
+                setUser(null);
+                setIsLoggedIn(false);
+                setEventRegistrations({});
+            }
+        } catch (error) {
+            console.log('Session debug error:', error);
+            setUser(null);
+            setIsLoggedIn(false);
+            setEventRegistrations({});
+        }
+    };
+
+    const checkUser = async () => {
+        try {
+            setisLoading(true);
+            const currentUser = await account.get();
+            if (currentUser) {
+                console.log('User found:', currentUser);
+                setIsLoggedIn(true);
+                setUser(currentUser);
+                // Trigger event registrations refresh
+                await updateAllEventRegistrations();
+            } else {
+                setIsLoggedIn(false);
+                setUser(null);
+                setEventRegistrations({});
+            }
+        } catch (error) {
+            console.log("Session check error:", error);
+            setIsLoggedIn(false);
+            setUser(null);
+            setEventRegistrations({});
+        } finally {
+            setisLoading(false);
+        }
+    };
+
+    // New function to update all event registrations
+    const updateAllEventRegistrations = async () => {
+        try {
+            // Get all events first
+            const events = await databases.listDocuments(
+                config.databaseId,
+                config.eventCollectionId
+            );
+
+            // Update registration count for each event
+            const promises = events.documents.map(event => 
+                updateEventRegistrationCount(event.$id)
+            );
+
+            await Promise.all(promises);
+        } catch (error) {
+            console.error('Error updating all event registrations:', error);
         }
     };
 
@@ -84,10 +142,11 @@ export function GlobalProvider({ children }) {
         }
     };
 
+    // Check user on mount and when isLoggedIn changes
     useEffect(() => {
-        debugUserSession();
-    }, [user]);
-
+        checkUser();
+    }, [isLoggedIn]);
+  
     useEffect(() => {
         getCurrentUser()
         .then((res) => {
@@ -119,7 +178,8 @@ export function GlobalProvider({ children }) {
                 updateUser,
                 eventRegistrations,
                 updateEventRegistrationCount,
-                getEventRegistrationCount
+                getEventRegistrationCount,
+                checkUser
             }}
         >
             {children}

@@ -16,6 +16,7 @@ import { useGlobalContext } from '../../context/GlobalProvider';
 
 
 const Home = () => {
+  
   const { user, updateEventRegistrationCount } = useGlobalContext();
   const { data: posts, refetch } = useAppwrite(getAllPosts);
   const [events, setEvents] = useState([]);
